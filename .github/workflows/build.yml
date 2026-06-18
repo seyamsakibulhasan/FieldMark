@@ -34,7 +34,7 @@ jobs:
           gradle-version: '8.9'
           cache-read-only: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/master' }}
 
-      - name: Decode debug keystore (fallback, for signed debug+release if provided)
+      - name: Decode debug keystore (fallback, for signed release if provided)
         env:
           DEBUG_KEYSTORE_B64: ${{ secrets.DEBUG_KEYSTORE_B64 }}
           KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
@@ -45,30 +45,23 @@ jobs:
             echo "Decoding release keystore from secret..."
             mkdir -p app/keystore
             echo "$DEBUG_KEYSTORE_B64" | base64 -d > app/keystore/release.jks
-            echo "DEBUG_KEYSTORE_B64=$DEBUG_KEYSTORE_B64" >> $GITHUB_ENV
-            echo "KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD" >> $GITHUB_ENV
-            echo "KEY_ALIAS=$KEY_ALIAS" >> $GITHUB_ENV
-            echo "KEY_PASSWORD=$KEY_PASSWORD" >> $GITHUB_ENV
             echo "HAS_KEYSTORE=true" >> $GITHUB_ENV
           else
-            echo "No keystore secret provided — release build will be signed with debug key (unsigned for distribution)."
+            echo "No keystore secret provided — release build will be signed with debug key."
             echo "HAS_KEYSTORE=false" >> $GITHUB_ENV
           fi
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew 2>/dev/null || true
-
       - name: Build Debug APK
-        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+        run: gradle :app:assembleDebug --no-daemon --stacktrace --warning-mode=summary
 
       - name: Build Release APK
         env:
           HAS_KEYSTORE: ${{ env.HAS_KEYSTORE }}
         run: |
           if [ "$HAS_KEYSTORE" = "true" ]; then
-            ./gradlew :app:assembleRelease --no-daemon --stacktrace
+            gradle :app:assembleRelease --no-daemon --stacktrace --warning-mode=summary
           else
-            ./gradlew :app:assembleRelease -Pandroid.injected.signing.store.file= -Pandroid.injected.signing.key.alias= -Pandroid.injected.signing.store.password= -Pandroid.injected.signing.key.password= --no-daemon --stacktrace || true
+            gradle :app:assembleRelease -Pandroid.injected.signing.store.file= -Pandroid.injected.signing.key.alias= -Pandroid.injected.signing.store.password= -Pandroid.injected.signing.key.password= --no-daemon --stacktrace --warning-mode=summary || true
           fi
 
       - name: Collect APKs
@@ -96,12 +89,3 @@ jobs:
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Attach APK to workflow run
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
-        with:
-          name: FieldMark-latest
-          path: dist/*.apk
-          if-no-files-found: ignore
-          retention-days: 14
