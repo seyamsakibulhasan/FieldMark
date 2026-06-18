@@ -2,8 +2,7 @@ package com.fieldmark.app.i18n
 
 import android.content.Context
 import android.content.SharedPreferences
-import androidx.compose.runtime.mutableStateOf
-import androidx.core.os.LocaleListCompat
+import androidx.appcompat.app.AppCompatDelegate
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -25,7 +24,7 @@ object LocaleManager {
 
     fun set(tag: String) {
         _current.value = tag
-        androidx.core.app.AppCompatDelegate.setApplicationLocales(
+        AppCompatDelegate.setApplicationLocales(
             LocaleListCompat.forLanguageTags(tag)
         )
     }

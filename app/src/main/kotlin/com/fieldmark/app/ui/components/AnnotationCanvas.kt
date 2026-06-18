@@ -90,9 +90,9 @@ fun AnnotationCanvas(
                     },
                     onDragEnd = {
                         val s = startPt
-                        val e = currentEnd ?: startPt
                         if (s != null) {
-                            val newAnno = when (tool) {
+                            val e: Offset = currentEnd ?: s
+                            val newAnno: Annotation? = when (tool) {
                                 AnnotationTool.Freehand -> if (freehandPts.size > 1)
                                     Annotation.Freehand(freehandPts, options.color, options.strokeWidth) else null
                                 AnnotationTool.Arrow -> Annotation.Arrow(s, e, options.color, options.strokeWidth)
