@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ফিল্ডমার্ক</string>
+    <string name="tagline">ফিল্ড ফটো অ্যানোটেশন, ২ডি→৩ডি, পরিমাপ, কম্পাস ও প্রিন্ট-রেডি পিডিএফ — ইঞ্জিনিয়ারদের জন্য তৈরি।</string>
+
+    <string name="back">ফিরে যান</string>
+    <string name="language">ভাষা</string>
+
+    <string name="capture_photo">ছবি তুলুন</string>
+    <string name="compass">কম্পাস</string>
+    <string name="anaglyph">২ডি → ৩ডি অ্যানাগ্লিফ</string>
+
+    <string name="camera_permission_needed">ছবি তুলতে ক্যামেরা অনুমতি প্রয়োজন।</string>
+    <string name="capture">ক্যাপচার</string>
+
+    <string name="editor_title">অ্যানোটেট</string>
+    <string name="image_unavailable">ছবি লোড করা যায়নি।</string>
+    <string name="tool_none">নির্বাচন</string>
+    <string name="tool_freehand">হাতে আঁকা</string>
+    <string name="tool_arrow">তীর</string>
+    <string name="tool_line">রেখা</string>
+    <string name="tool_rect">আয়তক্ষেত্র</string>
+    <string name="tool_circle">বৃত্ত</string>
+    <string name="tool_measure">পরিমাপ</string>
+    <string name="tool_text">টেক্সট</string>
+    <string name="color_red">লাল</string>
+    <string name="color_blue">নীল</string>
+    <string name="color_green">সবুজ</string>
+    <string name="color_yellow">হলুদ</string>
+    <string name="color_white">সাদা</string>
+    <string name="color_black">কালো</string>
+    <string name="stroke">রেখার পুরুত্ব</string>
+    <string name="px_per_unit">প্রতি এককে পিক্সেল</string>
+    <string name="unit">একক</string>
+    <string name="add_text">টেক্সট যোগ</string>
+    <string name="text_placeholder">নোট লিখুন…</string>
+    <string name="tap_to_place_text">ছবিতে টোকা দিয়ে টেক্সট বসান (অথবা টোকা দিয়ে যোগ বোতাম চাপুন)</string>
+    <string name="project_name">প্রকল্পের নাম</string>
+    <string name="location">অবস্থান</string>
+    <string name="inspected_by">পরিদর্শক</string>
+    <string name="notes">নোট</string>
+    <string name="export_pdf">পিডিএফ রপ্তানি</string>
+    <string name="make_3d">৩ডি বানান</string>
+    <string name="undo">পূর্বাবস্থা</string>
+    <string name="redo">পুনরায়</string>
+    <string name="clear">শেষটি মুছুন</string>
+    <string name="add">যোগ</string>
+    <string name="cancel">বাতিল</string>
+    <string name="anaglyph_help">লাল-সায়ান ৩ডি চশমা দিয়ে দেখুন — গভীরতার অনুভূতি পাবেন। লুমিন্যান্স ও প্রান্ত গভীরতা অনুমান থেকে তৈরি।</string>
+    <string name="feature_coming_for_uri">গ্যালারি থেকে ছবি আনার ফিচার শীঘ্রই আসছে।</string>
+
+    <string name="heading">দিকনির্দেশ</string>
+    <string name="pitch">পিচ</string>
+    <string name="roll">রোল</string>
+    <string name="north">উত্তর</string>
+    <string name="northeast">উত্তর-পূর্ব</string>
+    <string name="east">পূর্ব</string>
+    <string name="southeast">দক্ষিণ-পূর্ব</string>
+    <string name="south">দক্ষিণ</string>
+    <string name="southwest">দক্ষিণ-পশ্চিম</string>
+    <string name="west">পশ্চিম</string>
+    <string name="northwest">উত্তর-পশ্চিম</string>
+</resources>

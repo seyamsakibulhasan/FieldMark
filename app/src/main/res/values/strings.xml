@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">FieldMark</string>
+    <string name="tagline">Field photo annotation, 2D→3D, measurements, compass & print-ready PDF — built for engineers.</string>
+
+    <!-- Navigation -->
+    <string name="back">Back</string>
+    <string name="language">Language</string>
+
+    <!-- Home -->
+    <string name="capture_photo">Capture Photo</string>
+    <string name="compass">Compass</string>
+    <string name="anaglyph">2D → 3D Anaglyph</string>
+
+    <!-- Camera -->
+    <string name="camera_permission_needed">Camera permission is required to capture photos.</string>
+    <string name="capture">Capture</string>
+
+    <!-- Editor -->
+    <string name="editor_title">Annotate</string>
+    <string name="image_unavailable">Image could not be loaded.</string>
+    <string name="tool_none">Select</string>
+    <string name="tool_freehand">Freehand</string>
+    <string name="tool_arrow">Arrow</string>
+    <string name="tool_line">Line</string>
+    <string name="tool_rect">Rect</string>
+    <string name="tool_circle">Circle</string>
+    <string name="tool_measure">Measure</string>
+    <string name="tool_text">Text</string>
+    <string name="color_red">Red</string>
+    <string name="color_blue">Blue</string>
+    <string name="color_green">Green</string>
+    <string name="color_yellow">Yellow</string>
+    <string name="color_white">White</string>
+    <string name="color_black">Black</string>
+    <string name="stroke">Stroke</string>
+    <string name="px_per_unit">Px per unit</string>
+    <string name="unit">Unit</string>
+    <string name="add_text">Add text</string>
+    <string name="text_placeholder">Type note…</string>
+    <string name="tap_to_place_text">Tap the image to place text (or use Add text button after tap)</string>
+    <string name="project_name">Project name</string>
+    <string name="location">Location</string>
+    <string name="inspected_by">Inspected by</string>
+    <string name="notes">Notes</string>
+    <string name="export_pdf">Export PDF</string>
+    <string name="make_3d">Make 3D</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+    <string name="clear">Delete last</string>
+    <string name="add">Add</string>
+    <string name="cancel">Cancel</string>
+    <string name="anaglyph_help">View with red-cyan 3D glasses for a stereoscopic depth effect. Generated from luminance + edge depth estimation.</string>
+    <string name="feature_coming_for_uri">Image import from gallery is coming next.</string>
+
+    <!-- Compass -->
+    <string name="heading">Heading</string>
+    <string name="pitch">Pitch</string>
+    <string name="roll">Roll</string>
+    <string name="north">North</string>
+    <string name="northeast">Northeast</string>
+    <string name="east">East</string>
+    <string name="southeast">Southeast</string>
+    <string name="south">South</string>
+    <string name="southwest">Southwest</string>
+    <string name="west">West</string>
+    <string name="northwest">Northwest</string>
+</resources>
