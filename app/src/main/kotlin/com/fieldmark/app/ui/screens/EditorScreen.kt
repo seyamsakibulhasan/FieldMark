@@ -15,14 +15,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Brush
 import androidx.compose.material.icons.filled.Circle
 import androidx.compose.material.icons.filled.CropSquare
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Redo
 import androidx.compose.material.icons.filled.Straighten
@@ -97,9 +97,11 @@ fun EditorScreen(nav: NavController, path: String) {
     var location by remember { mutableStateOf("") }
     var inspectedBy by remember { mutableStateOf("") }
     var approvedBy by remember { mutableStateOf("") }
+    var revision by remember { mutableStateOf("Rev-01") }
     var notes by remember { mutableStateOf("") }
     var textTapPos by remember { mutableStateOf<Offset?>(null) }
     var textValue by remember { mutableStateOf("") }
+    var selectedIndex by remember { mutableStateOf<Int?>(null) }
     var busy by remember { mutableStateOf(false) }
 
     var metadata by remember { mutableStateOf<PhotoMetadata?>(null) }
@@ -110,11 +112,21 @@ fun EditorScreen(nav: NavController, path: String) {
         }
     }
 
+    LaunchedEffect(tool) {
+        if (tool != AnnotationTool.Select) selectedIndex = null
+    }
+
     fun commit(newItems: List<Annotation>) {
         undoStack.add(items.toList())
         redoStack.clear()
         items.clear()
         items.addAll(newItems)
+    }
+
+    fun mutateItem(index: Int, transform: (Annotation) -> Annotation) {
+        undoStack.add(items.toList())
+        redoStack.clear()
+        items[index] = transform(items[index])
     }
 
     Scaffold(
@@ -127,19 +139,30 @@ fun EditorScreen(nav: NavController, path: String) {
                     }
                 },
                 actions = {
+                    if (selectedIndex != null) {
+                        IconButton(onClick = {
+                            val idx = selectedIndex ?: return@IconButton
+                            if (idx in items.indices) {
+                                undoStack.add(items.toList())
+                                redoStack.clear()
+                                items.removeAt(idx)
+                            }
+                            selectedIndex = null
+                        }) {
+                            Icon(Icons.Default.DeleteForever, contentDescription = stringResource(R.string.delete_selected), tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
                     IconButton(onClick = {
-                        if (items.isNotEmpty()) { undoStack.add(items.toList()); redoStack.clear(); items.removeAt(items.lastIndex) }
+                        if (items.isNotEmpty()) { undoStack.add(items.toList()); redoStack.clear(); items.removeAt(items.lastIndex); selectedIndex = null }
                     }) { Icon(Icons.Default.Undo, contentDescription = stringResource(R.string.undo)) }
                     IconButton(onClick = {
                         if (redoStack.isNotEmpty()) {
                             undoStack.add(items.toList())
                             val next = redoStack.removeAt(redoStack.lastIndex)
                             items.clear(); items.addAll(next)
+                            selectedIndex = null
                         }
                     }) { Icon(Icons.Default.Redo, contentDescription = stringResource(R.string.redo)) }
-                    IconButton(onClick = {
-                        if (items.isNotEmpty()) { undoStack.add(items.toList()); redoStack.clear(); items.removeAt(items.lastIndex) }
-                    }) { Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.clear)) }
                 }
             )
         }
@@ -158,8 +181,27 @@ fun EditorScreen(nav: NavController, path: String) {
                     options = ToolOptions(color = color, strokeWidth = strokeWidth),
                     background = bitmap,
                     metadata = metadata,
+                    selectedIndex = selectedIndex,
                     onCommit = { commit(it) },
                     onTextTap = { offset -> textTapPos = offset; textValue = "" },
+                    onSelect = { selectedIndex = it },
+                    onMove = { index, delta ->
+                        if (index in items.indices) {
+                            val item = items[index]
+                            if (item is Annotation.TextNote) {
+                                mutateItem(index) { (it as Annotation.TextNote).copy(position = Offset(it.position.x + delta.x, it.position.y + delta.y)) }
+                            }
+                        }
+                    },
+                    onResize = { index, delta ->
+                        if (index in items.indices) {
+                            val item = items[index]
+                            if (item is Annotation.TextNote) {
+                                val newSize = (item.fontSizeSp - delta.y * 0.08f).coerceIn(8f, 120f)
+                                mutateItem(index) { (it as Annotation.TextNote).copy(fontSizeSp = newSize) }
+                            }
+                        }
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -167,7 +209,7 @@ fun EditorScreen(nav: NavController, path: String) {
                 Column(modifier = Modifier.padding(8.dp)) {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         items(listOf(
-                            R.string.tool_none to AnnotationTool.None,
+                            R.string.tool_select to AnnotationTool.Select,
                             R.string.tool_freehand to AnnotationTool.Freehand,
                             R.string.tool_arrow to AnnotationTool.Arrow,
                             R.string.tool_line to AnnotationTool.Line,
@@ -251,6 +293,21 @@ fun EditorScreen(nav: NavController, path: String) {
                         )
                     }
                     Spacer(Modifier.size(4.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = approvedBy,
+                            onValueChange = { approvedBy = it },
+                            label = { Text(stringResource(R.string.approved_by)) },
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = revision,
+                            onValueChange = { revision = it },
+                            label = { Text(stringResource(R.string.revision)) },
+                            modifier = Modifier.width(120.dp)
+                        )
+                    }
+                    Spacer(Modifier.size(4.dp))
                     OutlinedTextField(
                         value = notes,
                         onValueChange = { notes = it },
@@ -271,6 +328,7 @@ fun EditorScreen(nav: NavController, path: String) {
                                         location = location.ifBlank { "-" },
                                         inspectedBy = inspectedBy.ifBlank { "-" },
                                         approvedBy = approvedBy.ifBlank { "-" },
+                                        revision = revision.ifBlank { "Rev-01" },
                                         reportNumber = "FM-${SimpleDateFormat("yyyyMMddHHmmss", Locale.US).format(Date())}",
                                         notes = notes
                                     )
@@ -341,9 +399,10 @@ fun EditorScreen(nav: NavController, path: String) {
 
 private fun iconForTool(t: AnnotationTool) = when (t) {
     AnnotationTool.None -> Icons.Default.Brush
+    AnnotationTool.Select -> Icons.Default.OpenWith
     AnnotationTool.Freehand -> Icons.Default.Brush
-    AnnotationTool.Arrow -> Icons.Default.ArrowForward
-    AnnotationTool.Line -> Icons.Default.ArrowForward
+    AnnotationTool.Arrow -> Icons.Default.ArrowBack
+    AnnotationTool.Line -> Icons.Default.ArrowBack
     AnnotationTool.Rect -> Icons.Default.CropSquare
     AnnotationTool.Circle -> Icons.Default.Circle
     AnnotationTool.Measurement -> Icons.Default.Straighten
@@ -422,11 +481,10 @@ private fun drawOnCanvas(canvas: android.graphics.Canvas, a: Annotation, imgW: F
                 val breakHalf = textW / 2f + padX + 4f
                 canvas.drawLine(a.start.x, a.start.y, midX - breakHalf, midY, stroke)
                 canvas.drawLine(midX + breakHalf, midY, a.end.x, a.end.y, stroke)
-                val drawArrow = { tx: Float, ty: Float, reverse: Boolean ->
-                    val dir = if (reverse) 1.0 else -1.0
-                    val baseAng = kotlin.math.atan2(dy.toDouble(), dx.toDouble())
-                    val ax = (tx + dir * arrowLen * kotlin.math.cos(baseAng)).toFloat()
-                    val ay = (ty + dir * arrowLen * kotlin.math.sin(baseAng)).toFloat()
+                val baseAng = kotlin.math.atan2(dy.toDouble(), dx.toDouble())
+                val drawArrow = { tx: Float, ty: Float, dirSign: Double ->
+                    val ax = (tx + dirSign * arrowLen * kotlin.math.cos(baseAng)).toFloat()
+                    val ay = (ty + dirSign * arrowLen * kotlin.math.sin(baseAng)).toFloat()
                     val lxa = (ax + arrowW * kotlin.math.cos(baseAng + Math.PI / 2.0)).toFloat()
                     val lya = (ay + arrowW * kotlin.math.sin(baseAng + Math.PI / 2.0)).toFloat()
                     val rxa = (ax - arrowW * kotlin.math.cos(baseAng + Math.PI / 2.0)).toFloat()
@@ -434,8 +492,8 @@ private fun drawOnCanvas(canvas: android.graphics.Canvas, a: Annotation, imgW: F
                     val p = android.graphics.Path().apply { moveTo(tx, ty); lineTo(lxa, lya); lineTo(rxa, rya); close() }
                     canvas.drawPath(p, fill)
                 }
-                drawArrow(a.start.x, a.start.y, false)
-                drawArrow(a.end.x, a.end.y, true)
+                drawArrow(a.start.x, a.start.y, -1.0)
+                drawArrow(a.end.x, a.end.y, 1.0)
                 val bg = android.graphics.Paint(fill).apply { color = android.graphics.Color.argb(235, 255, 255, 255) }
                 canvas.drawRect(midX - textW / 2f - padX, midY - textH / 2f - padY / 2f, midX + textW / 2f + padX, midY + textH / 2f + padY / 2f, bg)
                 canvas.drawRect(midX - textW / 2f - padX, midY - textH / 2f - padY / 2f, midX + textW / 2f + padX, midY + textH / 2f + padY / 2f, android.graphics.Paint(stroke).apply { strokeWidth = (sw * 0.4f).coerceAtLeast(1f) })

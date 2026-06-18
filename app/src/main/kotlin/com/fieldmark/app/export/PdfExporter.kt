@@ -36,17 +36,18 @@ object PdfExporter {
         val doc = PdfDocument()
         val pageWidth = 1240
         val pageHeight = 1754
+        val margin = 48
+        val blockHeight = 260
         val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
         val page = doc.startPage(pageInfo)
         val canvas: Canvas = page.canvas
         canvas.drawColor(Color.WHITE)
 
-        val margin = 48
-        val topArea = (pageHeight - margin - 220).toInt()
+        val topArea = (pageHeight - margin - blockHeight).toFloat()
         val availW = pageWidth - margin * 2
         val srcW = composited.width
         val srcH = composited.height
-        val scale = minOf(availW.toFloat() / srcW, topArea.toFloat() / srcH)
+        val scale = minOf(availW.toFloat() / srcW, topArea / srcH)
         val drawW = (srcW * scale).toInt()
         val drawH = (srcH * scale).toInt()
         val left = (pageWidth - drawW) / 2
@@ -54,7 +55,7 @@ object PdfExporter {
         val dst = Rect(left, top, left + drawW, top + drawH)
         canvas.drawBitmap(composited, null, dst, null)
 
-        drawFrameAndBlock(canvas, pageWidth, pageHeight, margin, block)
+        drawFrameAndBlock(canvas, pageWidth, pageHeight, margin, blockHeight, block)
         doc.finishPage(page)
 
         val outDir = File(context.filesDir, "exports").apply { mkdirs() }
@@ -85,12 +86,13 @@ object PdfExporter {
         pageWidth: Int,
         pageHeight: Int,
         margin: Int,
+        blockHeight: Int,
         block: TitleBlock
     ) {
         val frame = Paint().apply {
             color = Color.BLACK
             style = Paint.Style.STROKE
-            strokeWidth = 2f
+            strokeWidth = 2.5f
             isAntiAlias = true
         }
         canvas.drawRect(
@@ -99,60 +101,83 @@ object PdfExporter {
             frame
         )
 
-        val blockTop = pageHeight - margin - 200
+        val blockTop = pageHeight - margin - blockHeight
         val blockBottom = pageHeight - margin
         val blockLeft = margin
         val blockRight = pageWidth - margin
-        val blockPaint = Paint().apply { color = Color.BLACK; style = Paint.Style.STROKE; strokeWidth = 1.5f }
+        val blockPaint = Paint().apply {
+            color = Color.BLACK
+            style = Paint.Style.STROKE
+            strokeWidth = 1.8f
+            isAntiAlias = true
+        }
         canvas.drawRect(
             blockLeft.toFloat(), blockTop.toFloat(),
             blockRight.toFloat(), blockBottom.toFloat(),
             blockPaint
         )
 
+        val rowH = (blockHeight - 50) / 3
+        val headerRowH = 50
         val cols = intArrayOf(
             blockLeft,
-            (blockLeft + blockRight) / 2,
+            (blockLeft + blockRight) / 3,
+            (blockLeft + blockRight) * 2 / 3,
             blockRight
         )
         val rows = intArrayOf(
             blockTop,
-            blockTop + 50,
-            blockTop + 100,
-            blockTop + 150,
+            blockTop + headerRowH,
+            blockTop + headerRowH + rowH,
+            blockTop + headerRowH + rowH * 2,
             blockBottom
         )
         for (i in 0 until cols.size - 1) {
-            canvas.drawLine(cols[i].toFloat(), blockTop.toFloat(), cols[i].toFloat(), blockBottom.toFloat(), blockPaint)
+            canvas.drawLine(cols[i].toFloat(), rows[0].toFloat(), cols[i].toFloat(), rows[4].toFloat(), blockPaint)
         }
         for (i in 0 until rows.size - 1) {
-            canvas.drawLine(blockLeft.toFloat(), rows[i].toFloat(), blockRight.toFloat(), rows[i].toFloat(), blockPaint)
+            canvas.drawLine(cols[0].toFloat(), rows[i].toFloat(), cols[3].toFloat(), rows[i].toFloat(), blockPaint)
         }
 
-        val title = Paint().apply { color = Color.BLACK; textSize = 18f; isFakeBoldText = true; isAntiAlias = true }
-        val label = Paint().apply { color = Color.DKGRAY; textSize = 10f; isAntiAlias = true }
-        val value = Paint().apply { color = Color.BLACK; textSize = 14f; isAntiAlias = true }
-        val small = Paint().apply { color = Color.BLACK; textSize = 11f; isAntiAlias = true }
+        val titlePaint = Paint().apply {
+            color = Color.WHITE; textSize = 16f; isFakeBoldText = true; isAntiAlias = true
+        }
+        val titleBg = Paint().apply { color = Color.parseColor("#1A2540"); isAntiAlias = true }
+        canvas.drawRect(cols[0].toFloat(), rows[0].toFloat(), cols[3].toFloat(), rows[1].toFloat(), titleBg)
+        canvas.drawText("  FIELDMARK — SITE DOCUMENTATION REPORT", (cols[0] + 12).toFloat(), (rows[0] + 32).toFloat(), titlePaint)
 
-        val cellPadX = 8
-        val cellPadY = 14
-        fun cell(col: Int, row: Int, labelText: String, valueText: String, big: Boolean = false) {
+        val labelPaint = Paint().apply { color = Color.parseColor("#666666"); textSize = 9.5f; isAntiAlias = true }
+        val valuePaint = Paint().apply { color = Color.BLACK; textSize = 15f; isAntiAlias = true; isFakeBoldText = true }
+        val valueSmPaint = Paint().apply { color = Color.BLACK; textSize = 13f; isAntiAlias = true }
+
+        val cellPadX = 10
+        val labelY = 18
+        val valueYBig = 48
+        val valueYSmall = 44
+
+        fun cell(col: Int, row: Int, rowHeight: Int, label: String, value: String, big: Boolean) {
             val cx = cols[col] + cellPadX
-            canvas.drawText(labelText, cx.toFloat(), (rows[row] + cellPadY).toFloat(), label)
-            canvas.drawText(valueText, cx.toFloat(), (rows[row] + cellPadY + (if (big) 18 else 16)).toFloat(),
-                if (big) value else small)
+            canvas.drawText(label, cx.toFloat(), (rows[row] + labelY).toFloat(), labelPaint)
+            canvas.drawText(value, cx.toFloat(), (rows[row] + (if (big) valueYBig else valueYSmall)).toFloat(), if (big) valuePaint else valueSmPaint)
         }
-        cell(0, 0, "PROJECT", block.projectName, true)
-        cell(1, 0, "LOCATION", block.location, true)
-        cell(2, 0, "REPORT NO.", block.reportNumber, true)
-        cell(0, 1, "INSPECTED BY", block.inspectedBy)
-        cell(1, 1, "APPROVED BY", block.approvedBy)
-        cell(2, 1, "REVISION", block.revision)
-        val today = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
-        cell(0, 2, "DATE / TIME", today)
-        cell(1, 2, "NOTES", block.notes.take(60))
-        cell(2, 2, "GENERATED BY", "FieldMark")
-        canvas.drawText("FieldMark — Site Documentation Report", (blockLeft + cellPadX).toFloat(),
-            (rows[3] + cellPadY + 16).toFloat(), small)
+
+        cell(0, 1, rowH, "PROJECT", block.projectName.ifBlank { "-" }, big = true)
+        cell(1, 1, rowH, "LOCATION", block.location.ifBlank { "-" }, big = true)
+        cell(2, 1, rowH, "REPORT NO.", block.reportNumber.ifBlank { "-" }, big = true)
+        cell(3, 1, rowH, "DATE", SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()), big = true)
+
+        cell(0, 2, rowH, "INSPECTED BY", block.inspectedBy.ifBlank { "-" }, big = false)
+        cell(1, 2, rowH, "APPROVED BY", block.approvedBy.ifBlank { "-" }, big = false)
+        cell(2, 2, rowH, "REVISION", block.revision.ifBlank { "Rev-01" }, big = false)
+        cell(3, 2, rowH, "TIME", SimpleDateFormat("HH:mm", Locale.US).format(Date()), big = false)
+
+        cell(0, 3, rowH, "NOTES", block.notes.take(80).ifBlank { "-" }, big = false)
+        cell(1, 3, rowH, "GENERATED BY", "FieldMark", big = false)
+        cell(2, 3, rowH, "FORMAT", "Engineering v1", big = false)
+        cell(3, 3, rowH, "PAGE", "1 / 1", big = false)
+
+        val footerY = (pageHeight - margin + 14).toFloat()
+        val footerPaint = Paint().apply { color = Color.parseColor("#888888"); textSize = 8.5f; isAntiAlias = true }
+        canvas.drawText("Generated by FieldMark (Mizanur Rahman) — Jetpack Compose", (blockLeft + 4).toFloat(), footerY, footerPaint)
     }
 }

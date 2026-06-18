@@ -16,6 +16,7 @@
     <string name="editor_title">অ্যানোটেট</string>
     <string name="image_unavailable">ছবি লোড করা যায়নি।</string>
     <string name="tool_none">নির্বাচন</string>
+    <string name="tool_select">নির্বাচন</string>
     <string name="tool_freehand">হাতে আঁকা</string>
     <string name="tool_arrow">তীর</string>
     <string name="tool_line">রেখা</string>
@@ -38,7 +39,10 @@
     <string name="project_name">প্রকল্পের নাম</string>
     <string name="location">অবস্থান</string>
     <string name="inspected_by">পরিদর্শক</string>
+    <string name="approved_by">অনুমোদনকারী</string>
+    <string name="revision">সংশোধন</string>
     <string name="notes">নোট</string>
+    <string name="delete_selected">নির্বাচিত মুছুন</string>
     <string name="export_pdf">পিডিএফ রপ্তানি</string>
     <string name="make_3d">৩ডি বানান</string>
     <string name="undo">পূর্বাবস্থা</string>

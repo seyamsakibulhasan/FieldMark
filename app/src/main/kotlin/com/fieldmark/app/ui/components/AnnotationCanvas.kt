@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -16,6 +17,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.asImageBitmap
@@ -24,7 +26,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
@@ -33,14 +37,17 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import com.fieldmark.app.annotation.Annotation
 import com.fieldmark.app.capture.PhotoMetadata
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.hypot
+import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.sin
 
 enum class AnnotationTool {
-    None, Freehand, Arrow, Line, Rect, Circle, Measurement, Text
+    None, Select, Freehand, Arrow, Line, Rect, Circle, Measurement, Text
 }
 
 data class ToolOptions(
@@ -55,6 +62,8 @@ data class EditorState(
     val measurementUnit: String = "cm"
 )
 
+private enum class GestureMode { None, Move, Resize }
+
 @Composable
 fun AnnotationCanvas(
     state: EditorState,
@@ -63,79 +72,143 @@ fun AnnotationCanvas(
     modifier: Modifier = Modifier,
     background: Bitmap? = null,
     metadata: PhotoMetadata? = null,
-    onCommit: (List<Annotation>) -> Unit,
-    onTextTap: (Offset) -> Unit = {}
+    selectedIndex: Int? = null,
+    onCommit: (List<Annotation>) -> Unit = {},
+    onTextTap: (Offset) -> Unit = {},
+    onSelect: (Int?) -> Unit = {},
+    onMove: (Int, Offset) -> Unit = { _, _ -> },
+    onResize: (Int, Offset) -> Unit = { _, _ -> }
 ) {
     var startPt by remember { mutableStateOf<Offset?>(null) }
     var freehandPts by remember { mutableStateOf<List<Offset>>(emptyList()) }
     var currentEnd by remember { mutableStateOf<Offset?>(null) }
     val textMeasurer = rememberTextMeasurer()
+    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
 
-    val drawItems = tool == AnnotationTool.None
+    val currentItemsState = rememberUpdatedState(state.items)
+    val currentSelectedState = rememberUpdatedState(selectedIndex)
+
+    val drawItems = tool == AnnotationTool.None || tool == AnnotationTool.Select
     val img = background?.asImageBitmap()
+
+    val selectModifier = if (tool == AnnotationTool.Select) {
+        Modifier.pointerInput(tool, canvasSize) {
+            val itemsRef = currentItemsState
+            val selRef = currentSelectedState
+            val markerR = 8f
+            coroutineScope {
+                launch {
+                    detectTapGestures { offset ->
+                        val items = itemsRef.value
+                        val hit = findAnnotationAt(items, offset, textMeasurer, markerR, size.width.toFloat())
+                        onSelect(hit)
+                    }
+                }
+                launch {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            val items = itemsRef.value
+                            val sel = selRef.value?.let { items.getOrNull(it) }
+                            if (sel is Annotation.TextNote) {
+                                val handle = getResizeHandlePos(sel, textMeasurer, markerR, size.width.toFloat())
+                                if (isOnResizeHandle(handle, offset)) {
+                                    onResizeMode = true
+                                } else if (hitTestTextNote(sel, offset, textMeasurer, markerR, size.width.toFloat())) {
+                                    onMoveMode = true
+                                } else {
+                                    val hit = findAnnotationAt(items, offset, textMeasurer, markerR, size.width.toFloat())
+                                    onSelect(hit)
+                                }
+                            } else {
+                                val hit = findAnnotationAt(items, offset, textMeasurer, markerR, size.width.toFloat())
+                                onSelect(hit)
+                            }
+                        },
+                        onDrag = { change, dragAmount ->
+                            val sel = selRef.value
+                            if (onResizeMode && sel != null) {
+                                onResize(sel, dragAmount)
+                                change.consume()
+                            } else if (onMoveMode && sel != null) {
+                                onMove(sel, dragAmount)
+                                change.consume()
+                            }
+                        },
+                        onDragEnd = { onResizeMode = false; onMoveMode = false },
+                        onDragCancel = { onResizeMode = false; onMoveMode = false }
+                    )
+                }
+            }
+        }
+    } else Modifier
+
+    val drawModifier = if (tool != AnnotationTool.Select && tool != AnnotationTool.None) {
+        Modifier.pointerInput(tool, options, state.measurementCalibration, state.measurementUnit) {
+            if (tool == AnnotationTool.Text) {
+                detectTapGestures { offset -> onTextTap(offset) }
+                return@pointerInput
+            }
+            detectDragGestures(
+                onDragStart = { offset ->
+                    startPt = offset
+                    currentEnd = offset
+                    if (tool == AnnotationTool.Freehand) freehandPts = listOf(offset)
+                },
+                onDrag = { change, _ ->
+                    currentEnd = change.position
+                    if (tool == AnnotationTool.Freehand) freehandPts = freehandPts + change.position
+                    change.consume()
+                },
+                onDragEnd = {
+                    val s = startPt
+                    if (s != null) {
+                        val e: Offset = currentEnd ?: s
+                        val newAnno: Annotation? = when (tool) {
+                            AnnotationTool.Freehand -> if (freehandPts.size > 1)
+                                Annotation.Freehand(freehandPts, options.color, options.strokeWidth) else null
+                            AnnotationTool.Arrow -> Annotation.Arrow(s, e, options.color, options.strokeWidth)
+                            AnnotationTool.Line -> Annotation.Line(s, e, options.color, options.strokeWidth)
+                            AnnotationTool.Rect -> Annotation.Rect(
+                                Offset(minOf(s.x, e.x), minOf(s.y, e.y)),
+                                Offset(maxOf(s.x, e.x), maxOf(s.y, e.y)),
+                                options.color, options.strokeWidth
+                            )
+                            AnnotationTool.Circle -> Annotation.Circle(
+                                s, hypot((e.x - s.x).toDouble(), (e.y - s.y).toDouble()).toFloat(),
+                                options.color, options.strokeWidth
+                            )
+                            AnnotationTool.Measurement -> {
+                                val px = hypot((e.x - s.x).toDouble(), (e.y - s.y).toDouble()).toFloat()
+                                val real = if (state.measurementCalibration > 0f) px / state.measurementCalibration else 0f
+                                Annotation.Measurement(
+                                    s, e, String.format("%.2f %s", real, state.measurementUnit),
+                                    state.measurementCalibration, state.measurementUnit,
+                                    options.color, options.strokeWidth
+                                )
+                            }
+                            else -> null
+                        }
+                        if (newAnno != null) onCommit(state.items + newAnno)
+                    }
+                    startPt = null
+                    currentEnd = null
+                    freehandPts = emptyList()
+                },
+                onDragCancel = {
+                    startPt = null
+                    currentEnd = null
+                    freehandPts = emptyList()
+                }
+            )
+        }
+    } else Modifier
 
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(tool, options, state.measurementCalibration, state.measurementUnit) {
-                if (tool == AnnotationTool.None) return@pointerInput
-                if (tool == AnnotationTool.Text) {
-                    detectTapGestures { offset -> onTextTap(offset) }
-                    return@pointerInput
-                }
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        startPt = offset
-                        currentEnd = offset
-                        if (tool == AnnotationTool.Freehand) freehandPts = listOf(offset)
-                    },
-                    onDrag = { change, _ ->
-                        currentEnd = change.position
-                        if (tool == AnnotationTool.Freehand) freehandPts = freehandPts + change.position
-                        change.consume()
-                    },
-                    onDragEnd = {
-                        val s = startPt
-                        if (s != null) {
-                            val e: Offset = currentEnd ?: s
-                            val newAnno: Annotation? = when (tool) {
-                                AnnotationTool.Freehand -> if (freehandPts.size > 1)
-                                    Annotation.Freehand(freehandPts, options.color, options.strokeWidth) else null
-                                AnnotationTool.Arrow -> Annotation.Arrow(s, e, options.color, options.strokeWidth)
-                                AnnotationTool.Line -> Annotation.Line(s, e, options.color, options.strokeWidth)
-                                AnnotationTool.Rect -> Annotation.Rect(
-                                    Offset(minOf(s.x, e.x), minOf(s.y, e.y)),
-                                    Offset(maxOf(s.x, e.x), maxOf(s.y, e.y)),
-                                    options.color, options.strokeWidth
-                                )
-                                AnnotationTool.Circle -> Annotation.Circle(
-                                    s, hypot((e.x - s.x).toDouble(), (e.y - s.y).toDouble()).toFloat(),
-                                    options.color, options.strokeWidth
-                                )
-                                AnnotationTool.Measurement -> {
-                                    val px = hypot((e.x - s.x).toDouble(), (e.y - s.y).toDouble()).toFloat()
-                                    val real = if (state.measurementCalibration > 0f) px / state.measurementCalibration else 0f
-                                    Annotation.Measurement(
-                                        s, e, String.format("%.2f %s", real, state.measurementUnit),
-                                        state.measurementCalibration, state.measurementUnit,
-                                        options.color, options.strokeWidth
-                                    )
-                                }
-                                else -> null
-                            }
-                            if (newAnno != null) onCommit(state.items + newAnno)
-                        }
-                        startPt = null
-                        currentEnd = null
-                        freehandPts = emptyList()
-                    },
-                    onDragCancel = {
-                        startPt = null
-                        currentEnd = null
-                        freehandPts = emptyList()
-                    }
-                )
-            }
+            .onSizeChanged { canvasSize = it }
+            .then(selectModifier)
+            .then(drawModifier)
     ) {
         var imgLeft = 0f; var imgTop = 0f; var imgW = 0f; var imgH = 0f
         if (img != null) {
@@ -155,6 +228,17 @@ fun AnnotationCanvas(
         }
         if (drawItems) {
             state.items.forEach { drawAnnotation(it, textMeasurer) }
+        }
+        if (selectedIndex != null && tool == AnnotationTool.Select) {
+            val sel = state.items.getOrNull(selectedIndex)
+            if (sel != null) {
+                val bounds = getSelectionBounds(sel, textMeasurer, 8f, size.width)
+                if (bounds != null) drawSelectionBox(bounds)
+                if (sel is Annotation.TextNote) {
+                    val handle = getResizeHandlePos(sel, textMeasurer, 8f, size.width)
+                    drawResizeHandle(handle)
+                }
+            }
         }
         val s = startPt
         val e = currentEnd
@@ -183,6 +267,10 @@ fun AnnotationCanvas(
         }
     }
 }
+
+// Persistent gesture state across recompositions (module-level vars are fine for this single-instance composable)
+private var onMoveMode = false
+private var onResizeMode = false
 
 fun DrawScope.drawInfoStamp(
     meta: PhotoMetadata,
@@ -213,25 +301,13 @@ fun DrawScope.drawInfoStamp(
     val iconCy = sy + stampH / 2f
     drawCompassIcon(iconCx, iconCy, iconSize / 2f, meta.heading)
     val textX = iconCx + iconSize / 2f + pad
-    val headingLayout = measurer.measure(
-        AnnotatedString("${meta.cardinal}  ${meta.heading.toInt()}°"),
-        style = TextStyle(color = Color.White, fontSize = (stampH * 0.22f).coerceAtLeast(11f).sp)
-    )
-    val prLayout = measurer.measure(
-        AnnotatedString("P ${"%.1f".format(meta.pitch)}°   R ${"%.1f".format(meta.roll)}°"),
-        style = TextStyle(color = Color(0xFFB8C2D9), fontSize = (stampH * 0.16f).coerceAtLeast(9f).sp)
-    )
-    val timeLayout = measurer.measure(
-        AnnotatedString(meta.formattedTime()),
-        style = TextStyle(color = Color(0xFF8B95AD), fontSize = (stampH * 0.14f).coerceAtLeast(8f).sp)
-    )
     drawIntoCanvas { canvas ->
         canvas.nativeCanvas.drawText(
             "${meta.cardinal}  ${meta.heading.toInt()}°",
             textX, sy + stampH * 0.36f,
             android.graphics.Paint().apply {
                 color = android.graphics.Color.WHITE
-                textSize = headingLayout.size.height.toFloat()
+                textSize = stampH * 0.22f
                 isAntiAlias = true
                 isFakeBoldText = true
             }
@@ -241,7 +317,7 @@ fun DrawScope.drawInfoStamp(
             textX, sy + stampH * 0.62f,
             android.graphics.Paint().apply {
                 color = android.graphics.Color.parseColor("#B8C2D9")
-                textSize = prLayout.size.height.toFloat()
+                textSize = stampH * 0.16f
                 isAntiAlias = true
             }
         )
@@ -250,7 +326,7 @@ fun DrawScope.drawInfoStamp(
             textX, sy + stampH * 0.84f,
             android.graphics.Paint().apply {
                 color = android.graphics.Color.parseColor("#8B95AD")
-                textSize = timeLayout.size.height.toFloat()
+                textSize = stampH * 0.14f
                 isAntiAlias = true
             }
         )
@@ -288,7 +364,7 @@ fun DrawScope.drawCompassIcon(cx: Float, cy: Float, r: Float, heading: Float) {
     drawCircle(Color(0xFF0A0E1A), radius = r * 0.05f, center = Offset(cx, cy))
 }
 
-fun DrawScope.drawAnnotation(a: Annotation, measurer: androidx.compose.ui.text.TextMeasurer) {
+fun DrawScope.drawAnnotation(a: Annotation, measurer: TextMeasurer) {
     when (a) {
         is Annotation.Freehand -> {
             if (a.points.size < 2) return
@@ -298,7 +374,7 @@ fun DrawScope.drawAnnotation(a: Annotation, measurer: androidx.compose.ui.text.T
             }
             drawPath(p, a.color, style = Stroke(a.strokeWidth, cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
-        is Annotation.Arrow -> drawProfessionalArrow(a, measurer)
+        is Annotation.Arrow -> drawProfessionalArrow(a)
         is Annotation.Line -> drawLine(a.color, a.start, a.end, strokeWidth = a.strokeWidth, cap = StrokeCap.Round)
         is Annotation.Rect -> {
             drawRect(
@@ -314,21 +390,20 @@ fun DrawScope.drawAnnotation(a: Annotation, measurer: androidx.compose.ui.text.T
     }
 }
 
-private fun DrawScope.drawProfessionalArrow(a: Annotation.Arrow, @Suppress("UNUSED_PARAMETER") measurer: androidx.compose.ui.text.TextMeasurer) {
+private fun DrawScope.drawProfessionalArrow(a: Annotation.Arrow) {
     val sw = a.strokeWidth
     drawLine(a.color, a.start, a.end, strokeWidth = sw, cap = StrokeCap.Round)
     val angle = atan2((a.end.y - a.start.y).toDouble(), (a.end.x - a.start.x).toDouble())
     val headLen = (sw * 4.5f).coerceAtLeast(14f)
     val headW = headLen * 0.55f
-    val tip = a.end
-    val baseCx = (tip.x - headLen * cos(angle)).toFloat()
-    val baseCy = (tip.y - headLen * sin(angle)).toFloat()
+    val baseCx = (a.end.x - headLen * cos(angle)).toFloat()
+    val baseCy = (a.end.y - headLen * sin(angle)).toFloat()
     val lx = (baseCx + headW * cos(angle + Math.PI / 2.0)).toFloat()
     val ly = (baseCy + headW * sin(angle + Math.PI / 2.0)).toFloat()
     val rx = (baseCx - headW * cos(angle + Math.PI / 2.0)).toFloat()
     val ry = (baseCy - headW * sin(angle + Math.PI / 2.0)).toFloat()
     val head = Path().apply {
-        moveTo(tip.x, tip.y); lineTo(lx, ly); lineTo(rx, ry); close()
+        moveTo(a.end.x, a.end.y); lineTo(lx, ly); lineTo(rx, ry); close()
     }
     drawPath(head, a.color)
     val anchorR = (sw * 1.1f).coerceAtLeast(5f)
@@ -336,7 +411,7 @@ private fun DrawScope.drawProfessionalArrow(a: Annotation.Arrow, @Suppress("UNUS
     drawCircle(a.color, radius = anchorR, center = a.start)
 }
 
-private fun DrawScope.drawProfessionalDimension(a: Annotation.Measurement, measurer: androidx.compose.ui.text.TextMeasurer) {
+private fun DrawScope.drawProfessionalDimension(a: Annotation.Measurement, measurer: TextMeasurer) {
     val sw = a.strokeWidth
     val extLen = (sw * 5f).coerceAtLeast(18f)
     val arrowLen = (sw * 3.2f).coerceAtLeast(10f)
@@ -360,11 +435,10 @@ private fun DrawScope.drawProfessionalDimension(a: Annotation.Measurement, measu
     val breakHalf = (textW / 2f) + padX + 4f
     drawLine(a.color, a.start, Offset(midX - breakHalf, midY), strokeWidth = sw, cap = StrokeCap.Round)
     drawLine(a.color, Offset(midX + breakHalf, midY), a.end, strokeWidth = sw, cap = StrokeCap.Round)
-    val drawArrow = { tip: Offset, reverse: Boolean ->
-        val dir = if (reverse) 1.0 else -1.0
-        val baseAng = atan2(dy.toDouble(), dx.toDouble())
-        val ax = (tip.x + dir * arrowLen * cos(baseAng)).toFloat()
-        val ay = (tip.y + dir * arrowLen * sin(baseAng)).toFloat()
+    val baseAng = atan2(dy.toDouble(), dx.toDouble())
+    val drawArrow = { tip: Offset, dirSign: Double ->
+        val ax = (tip.x + dirSign * arrowLen * cos(baseAng)).toFloat()
+        val ay = (tip.y + dirSign * arrowLen * sin(baseAng)).toFloat()
         val lxa = (ax + arrowW * cos(baseAng + Math.PI / 2.0)).toFloat()
         val lya = (ay + arrowW * sin(baseAng + Math.PI / 2.0)).toFloat()
         val rxa = (ax - arrowW * cos(baseAng + Math.PI / 2.0)).toFloat()
@@ -372,8 +446,8 @@ private fun DrawScope.drawProfessionalDimension(a: Annotation.Measurement, measu
         val p = Path().apply { moveTo(tip.x, tip.y); lineTo(lxa, lya); lineTo(rxa, rya); close() }
         drawPath(p, a.color)
     }
-    drawArrow(a.start, false)
-    drawArrow(a.end, true)
+    drawArrow(a.start, -1.0)
+    drawArrow(a.end, 1.0)
     drawRect(
         color = Color.White.copy(alpha = 0.92f),
         topLeft = Offset(midX - textW / 2f - padX, midY - textH / 2f - padY / 2f),
@@ -401,7 +475,7 @@ private fun DrawScope.drawProfessionalDimension(a: Annotation.Measurement, measu
     }
 }
 
-private fun DrawScope.drawProfessionalCallout(a: Annotation.TextNote, measurer: androidx.compose.ui.text.TextMeasurer) {
+private fun DrawScope.drawProfessionalCallout(a: Annotation.TextNote, measurer: TextMeasurer) {
     val sw = a.strokeWidth
     val markerR = (sw * 1.3f + 5f).coerceAtLeast(8f)
     val markerInnerR = markerR * 0.62f
@@ -453,7 +527,147 @@ private fun DrawScope.drawProfessionalCallout(a: Annotation.TextNote, measurer: 
     }
 }
 
-internal fun colorToAndroidArgb(c: androidx.compose.ui.graphics.Color): Int {
+private fun DrawScope.drawSelectionBox(bounds: Pair<Offset, Offset>) {
+    val (tl, br) = bounds
+    val sel = Color(0xFF1A5FB4)
+    drawRect(
+        color = sel,
+        topLeft = Offset(tl.x - 2f, tl.y - 2f),
+        size = Size(br.x - tl.x + 4f, br.y - tl.y + 4f),
+        style = Stroke(
+            width = 2f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f), 0f)
+        )
+    )
+}
+
+private fun DrawScope.drawResizeHandle(handle: Offset) {
+    val sel = Color(0xFF1A5FB4)
+    drawCircle(Color.White, radius = 14f, center = handle)
+    drawCircle(sel, radius = 11f, center = handle)
+    drawCircle(Color.White, radius = 5f, center = handle)
+}
+
+private fun getResizeHandlePos(note: Annotation.TextNote, measurer: TextMeasurer, markerR: Float, canvasW: Float): Offset {
+    val layout = measurer.measure(AnnotatedString(note.text), style = TextStyle(color = note.color, fontSize = note.fontSizeSp.sp))
+    val textW = layout.size.width.toFloat()
+    val textH = layout.size.height.toFloat()
+    val boxW = textW + 9f * 2
+    val boxH = textH + 5f * 2
+    val dirX = if (note.position.x + boxW + markerR * 3f < canvasW) 1f else -1f
+    val boxX = note.position.x + dirX * (markerR * 2.5f)
+    val boxY = note.position.y - boxH / 2f
+    return Offset(if (dirX > 0) boxX + boxW else boxX, boxY + boxH)
+}
+
+private fun isOnResizeHandle(handle: Offset, tap: Offset, handleRadius: Float = 20f): Boolean {
+    val dist = hypot((tap.x - handle.x).toDouble(), (tap.y - handle.y).toDouble())
+    return dist <= handleRadius
+}
+
+private fun hitTestTextNote(note: Annotation.TextNote, tap: Offset, measurer: TextMeasurer, markerR: Float, canvasW: Float): Boolean {
+    val layout = measurer.measure(AnnotatedString(note.text), style = TextStyle(color = note.color, fontSize = note.fontSizeSp.sp))
+    val textW = layout.size.width.toFloat()
+    val textH = layout.size.height.toFloat()
+    val padX = 9f; val padY = 5f
+    val boxW = textW + padX * 2
+    val boxH = textH + padY * 2
+    val dist = hypot((tap.x - note.position.x).toDouble(), (tap.y - note.position.y).toDouble())
+    if (dist <= markerR + 8f) return true
+    val boxXRight = note.position.x + (markerR * 2.5f)
+    val boxY = note.position.y - boxH / 2f
+    if (tap.x >= boxXRight && tap.x <= boxXRight + boxW && tap.y >= boxY && tap.y <= boxY + boxH) return true
+    val boxXLeft = note.position.x - (markerR * 2.5f) - boxW
+    if (tap.x >= boxXLeft && tap.x <= boxXLeft + boxW && tap.y >= boxY && tap.y <= boxY + boxH) return true
+    return false
+}
+
+private fun pointToSegmentDistance(p: Offset, a: Offset, b: Offset): Float {
+    val dx = b.x - a.x
+    val dy = b.y - a.y
+    val lenSq = dx * dx + dy * dy
+    if (lenSq == 0f) return hypot((p.x - a.x).toDouble(), (p.y - a.y).toDouble()).toFloat()
+    var t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / lenSq
+    t = t.coerceIn(0f, 1f)
+    val projX = a.x + t * dx
+    val projY = a.y + t * dy
+    return hypot((p.x - projX).toDouble(), (p.y - projY).toDouble()).toFloat()
+}
+
+private fun findAnnotationAt(
+    items: List<Annotation>,
+    tap: Offset,
+    measurer: TextMeasurer,
+    markerR: Float,
+    canvasW: Float
+): Int? {
+    for (i in items.indices.reversed()) {
+        val item = items[i]
+        when (item) {
+            is Annotation.TextNote -> if (hitTestTextNote(item, tap, measurer, markerR, canvasW)) return i
+            is Annotation.Freehand -> if (item.points.any { pt -> hypot((tap.x - pt.x).toDouble(), (tap.y - pt.y).toDouble()) < 20f }) return i
+            is Annotation.Arrow -> if (pointToSegmentDistance(tap, item.start, item.end) < 20f) return i
+            is Annotation.Line -> if (pointToSegmentDistance(tap, item.start, item.end) < 18f) return i
+            is Annotation.Rect -> {
+                val pad = 8f
+                if (tap.x >= item.topLeft.x - pad && tap.x <= item.bottomRight.x + pad &&
+                    tap.y >= item.topLeft.y - pad && tap.y <= item.bottomRight.y + pad) return i
+            }
+            is Annotation.Circle -> {
+                val dist = hypot((tap.x - item.center.x).toDouble(), (tap.y - item.center.y).toDouble())
+                if (dist <= item.radius + 8f) return i
+            }
+            is Annotation.Measurement -> if (pointToSegmentDistance(tap, item.start, item.end) < 28f) return i
+        }
+    }
+    return null
+}
+
+private fun getSelectionBounds(
+    item: Annotation,
+    measurer: TextMeasurer,
+    markerR: Float,
+    canvasW: Float
+): Pair<Offset, Offset>? {
+    return when (item) {
+        is Annotation.TextNote -> {
+            val layout = measurer.measure(AnnotatedString(item.text), style = TextStyle(color = item.color, fontSize = item.fontSizeSp.sp))
+            val textW = layout.size.width.toFloat()
+            val textH = layout.size.height.toFloat()
+            val boxW = textW + 9f * 2
+            val boxH = textH + 5f * 2
+            val dirX = if (item.position.x + boxW + markerR * 3f < canvasW) 1f else -1f
+            val boxX = item.position.x + dirX * (markerR * 2.5f)
+            val boxY = item.position.y - boxH / 2f
+            Offset(boxX, boxY) to Offset(boxX + boxW, boxY + boxH)
+        }
+        is Annotation.Freehand -> if (item.points.isEmpty()) null else {
+            val pad = 12f
+            Offset(item.points.minOf { it.x } - pad, item.points.minOf { it.y } - pad) to
+            Offset(item.points.maxOf { it.x } + pad, item.points.maxOf { it.y } + pad)
+        }
+        is Annotation.Arrow -> {
+            val pad = 18f
+            Offset(minOf(item.start.x, item.end.x) - pad, minOf(item.start.y, item.end.y) - pad) to
+            Offset(maxOf(item.start.x, item.end.x) + pad, maxOf(item.start.y, item.end.y) + pad)
+        }
+        is Annotation.Line -> {
+            val pad = 10f
+            Offset(minOf(item.start.x, item.end.x) - pad, minOf(item.start.y, item.end.y) - pad) to
+            Offset(maxOf(item.start.x, item.end.x) + pad, maxOf(item.start.y, item.end.y) + pad)
+        }
+        is Annotation.Rect -> Offset(item.topLeft.x - 4f, item.topLeft.y - 4f) to Offset(item.bottomRight.x + 4f, item.bottomRight.y + 4f)
+        is Annotation.Circle -> Offset(item.center.x - item.radius - 4f, item.center.y - item.radius - 4f) to
+            Offset(item.center.x + item.radius + 4f, item.center.y + item.radius + 4f)
+        is Annotation.Measurement -> {
+            val pad = 28f
+            Offset(minOf(item.start.x, item.end.x) - pad, minOf(item.start.y, item.end.y) - pad) to
+            Offset(maxOf(item.start.x, item.end.x) + pad, maxOf(item.start.y, item.end.y) + pad)
+        }
+    }
+}
+
+internal fun colorToAndroidArgb(c: Color): Int {
     val a = (c.alpha * 255).toInt() and 0xFF
     val r = (c.red * 255).toInt() and 0xFF
     val g = (c.green * 255).toInt() and 0xFF

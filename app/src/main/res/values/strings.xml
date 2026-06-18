@@ -20,6 +20,7 @@
     <string name="editor_title">Annotate</string>
     <string name="image_unavailable">Image could not be loaded.</string>
     <string name="tool_none">Select</string>
+    <string name="tool_select">Select</string>
     <string name="tool_freehand">Freehand</string>
     <string name="tool_arrow">Arrow</string>
     <string name="tool_line">Line</string>
@@ -42,7 +43,10 @@
     <string name="project_name">Project name</string>
     <string name="location">Location</string>
     <string name="inspected_by">Inspected by</string>
+    <string name="approved_by">Approved by</string>
+    <string name="revision">Revision</string>
     <string name="notes">Notes</string>
+    <string name="delete_selected">Delete selected</string>
     <string name="export_pdf">Export PDF</string>
     <string name="make_3d">Make 3D</string>
     <string name="undo">Undo</string>
