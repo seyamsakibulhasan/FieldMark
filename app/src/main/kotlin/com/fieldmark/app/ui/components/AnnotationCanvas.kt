@@ -372,8 +372,8 @@ private fun DrawScope.drawProfessionalDimension(a: Annotation.Measurement, measu
         val p = Path().apply { moveTo(tip.x, tip.y); lineTo(lxa, lya); lineTo(rxa, rya); close() }
         drawPath(p, a.color)
     }
-    drawArrow(a.start, reverse = false)
-    drawArrow(a.end, reverse = true)
+    drawArrow(a.start, false)
+    drawArrow(a.end, true)
     drawRect(
         color = Color.White.copy(alpha = 0.92f),
         topLeft = Offset(midX - textW / 2f - padX, midY - textH / 2f - padY / 2f),

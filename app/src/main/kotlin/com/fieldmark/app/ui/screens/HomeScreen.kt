@@ -30,7 +30,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -68,6 +67,9 @@ fun HomeScreen(nav: NavController) {
         }
     }
 
+    val captureLabel = stringResource(R.string.capture_photo)
+    val galleryLabel = stringResource(R.string.pick_from_gallery)
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -99,20 +101,16 @@ fun HomeScreen(nav: NavController) {
                 color = MaterialTheme.colorScheme.onBackground
             )
             Spacer(Modifier.height(8.dp))
-            val items = listOf(
-                Triple(R.string.capture_photo, Icons.Default.Camera) to { nav.navigate(Routes.CAMERA) },
-                Triple(R.string.pick_from_gallery, Icons.Default.ViewInAr) to {
-                    pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }
+            FeatureCard(
+                title = captureLabel,
+                icon = Icons.Default.Camera,
+                onClick = { nav.navigate(Routes.CAMERA) }
             )
-            items.forEach { (meta, action) ->
-                val (labelRes, icon) = meta
-                FeatureCard(
-                    title = stringResource(labelRes),
-                    icon = icon,
-                    onClick = action
-                )
-            }
+            FeatureCard(
+                title = galleryLabel,
+                icon = Icons.Default.ViewInAr,
+                onClick = { pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }
+            )
         }
     }
 }

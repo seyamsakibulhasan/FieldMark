@@ -434,8 +434,8 @@ private fun drawOnCanvas(canvas: android.graphics.Canvas, a: Annotation, imgW: F
                     val p = android.graphics.Path().apply { moveTo(tx, ty); lineTo(lxa, lya); lineTo(rxa, rya); close() }
                     canvas.drawPath(p, fill)
                 }
-                drawArrow(a.start.x, a.start.y, reverse = false)
-                drawArrow(a.end.x, a.end.y, reverse = true)
+                drawArrow(a.start.x, a.start.y, false)
+                drawArrow(a.end.x, a.end.y, true)
                 val bg = android.graphics.Paint(fill).apply { color = android.graphics.Color.argb(235, 255, 255, 255) }
                 canvas.drawRect(midX - textW / 2f - padX, midY - textH / 2f - padY / 2f, midX + textW / 2f + padX, midY + textH / 2f + padY / 2f, bg)
                 canvas.drawRect(midX - textW / 2f - padX, midY - textH / 2f - padY / 2f, midX + textW / 2f + padX, midY + textH / 2f + padY / 2f, android.graphics.Paint(stroke).apply { strokeWidth = (sw * 0.4f).coerceAtLeast(1f) })

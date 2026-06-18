@@ -10,6 +10,7 @@
     <!-- Home -->
     <string name="capture_photo">Capture Photo</string>
     <string name="pick_from_gallery">Pick Photo (2D → 3D)</string>
+    <string name="anaglyph">2D → 3D Anaglyph</string>
 
     <!-- Camera -->
     <string name="camera_permission_needed">Camera permission is required to capture photos.</string>
