@@ -1,8 +1,8 @@
 # FieldMark
 
-> Field photo annotation, 2D→3D anaglyph, measurements, compass, and print-ready PDF export — built for engineers, electricians, and site supervisors.
+> Field photo annotation with embedded compass heading, professional engineering measurements, and print-ready PDF export — built for engineers, electricians, and site supervisors.
 
-**Mizanur Rahman** is a free, open-source Android app that turns your phone into a smart field-documentation tool. Capture a photo, mark it up with arrows, dimensions, freehand handwriting, and text notes, view it as a red-cyan 3D anaglyph, check your heading with a built-in compass, and export a print-ready engineering PDF — all offline, in **English or বাংলা**.
+**Mizanur Rahman** is a free, open-source Android app that turns your phone into a smart field-documentation tool. Capture a photo, mark it up with professional arrows, engineering-dimension measurements, callout text notes, and freehand handwriting — and the current compass heading, pitch, roll, and timestamp are **automatically stamped onto the image**. Export a print-ready engineering PDF — all offline, in **English or বাংলা**.
 
 ---
 
@@ -10,13 +10,12 @@
 
 | Feature | Description |
 | --- | --- |
-| 📷 **Camera capture** | In-app high-resolution camera (CameraX) with one-tap shutter. |
-| ✏️ **Vector annotation** | Freehand, arrow, line, rectangle, circle, text — with color and stroke-width controls. |
-| 📏 **Measurements** | Drag-to-measure with configurable pixels-per-unit (mm, cm, m, in, ft…). |
-| 🔤 **Text & handwriting** | Tap to place a custom text note, or use freehand for handwriting. |
-| 🌐 **Compass** | Live magnetic compass with heading, pitch, roll, and an 8-point cardinal rose. |
+| 📷 **Camera capture with live compass** | In-app high-resolution camera (CameraX) with a live compass-rose overlay while you frame the shot. |
+| 🧭 **Auto-embedded compass stamp** | When you press the shutter, the current **heading (N/NE/E/SE/…°), pitch, roll, and timestamp** are captured and rendered as a professional metadata stamp on the photo — looks like an engineering EXIF overlay. |
+| ✏️ **Professional vector annotation** | Filled-triangle arrows, engineering-dimension measurements (extension lines + dimension line with break + double arrows), callout text notes (numbered marker + leader line + text box), freehand, line, rectangle, circle — with color and stroke-width controls. |
+| 📏 **Calibrated measurements** | Drag-to-measure with configurable pixels-per-unit (mm, cm, m, in, ft…). |
 | 🕶️ **2D → 3D Anaglyph** | Convert any photo into a red-cyan stereoscopic 3D image (view with cheap 3D glasses). |
-| 📄 **Print-ready PDF** | Export the annotated image with a full engineering title block (project, location, inspector, date, report number, notes) — share via WhatsApp, email, or Bluetooth thermal printer. |
+| 📄 **Print-ready PDF** | Export the annotated image (including the compass stamp) with a full engineering title block (project, location, inspector, date, report number, notes) — share via WhatsApp, email, or Bluetooth thermal printer. |
 | ↩️ **Undo / Redo** | Multi-step undo/redo for every annotation. |
 | 🌗 **Material 3 + dark mode** | Polished industrial UI with full dark mode and dynamic color on Android 12+. |
 | 🌍 **Bilingual** | English (default) and বাংলা (Bangla) — switchable in-app, per-app locale via `AppCompatDelegate`. |

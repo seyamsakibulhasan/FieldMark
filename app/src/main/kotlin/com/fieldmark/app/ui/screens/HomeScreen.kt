@@ -1,5 +1,8 @@
 package com.fieldmark.app.ui.screens
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,12 +14,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Camera
-import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.ViewInAr
 import androidx.compose.material3.Card
@@ -38,6 +37,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -45,13 +45,28 @@ import androidx.navigation.NavController
 import com.fieldmark.app.R
 import com.fieldmark.app.i18n.LocaleManager
 import com.fieldmark.app.nav.Routes
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(nav: NavController) {
     val ctx = LocalContext.current
     var langMenu by remember { mutableStateOf(false) }
-    val currentLang by LocaleManager.current.collectAsState()
+
+    val pickMedia = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        uri?.let {
+            val outDir = File(ctx.filesDir, "photos").apply { mkdirs() }
+            val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val outFile = File(outDir, "picked_$ts.jpg")
+            ctx.contentResolver.openInputStream(it)?.use { input ->
+                outFile.outputStream().use { output -> input.copyTo(output) }
+            }
+            nav.navigate(Routes.anaglyph(outFile.absolutePath))
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -63,14 +78,8 @@ fun HomeScreen(nav: NavController) {
                             Icon(Icons.Default.Language, contentDescription = stringResource(R.string.language))
                         }
                         DropdownMenu(expanded = langMenu, onDismissRequest = { langMenu = false }) {
-                            DropdownMenuItem(
-                                text = { Text("English") },
-                                onClick = { LocaleManager.set(ctx, LocaleManager.Lang.ENGLISH); langMenu = false }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("বাংলা") },
-                                onClick = { LocaleManager.set(ctx, LocaleManager.Lang.BANGLA); langMenu = false }
-                            )
+                            DropdownMenuItem(text = { Text("English") }, onClick = { LocaleManager.set(ctx, LocaleManager.Lang.ENGLISH); langMenu = false })
+                            DropdownMenuItem(text = { Text("বাংলা") }, onClick = { LocaleManager.set(ctx, LocaleManager.Lang.BANGLA); langMenu = false })
                         }
                     }
                 }
@@ -91,15 +100,17 @@ fun HomeScreen(nav: NavController) {
             )
             Spacer(Modifier.height(8.dp))
             val items = listOf(
-                Triple(R.string.capture_photo, Icons.Default.Camera, Routes.CAMERA),
-                Triple(R.string.compass, Icons.Default.Explore, Routes.COMPASS),
-                Triple(R.string.anaglyph, Icons.Default.ViewInAr, Routes.ANAGLYPH)
+                Triple(R.string.capture_photo, Icons.Default.Camera) to { nav.navigate(Routes.CAMERA) },
+                Triple(R.string.pick_from_gallery, Icons.Default.ViewInAr) to {
+                    pickMedia.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                }
             )
-            items.forEach { (labelRes, icon, route) ->
+            items.forEach { (meta, action) ->
+                val (labelRes, icon) = meta
                 FeatureCard(
                     title = stringResource(labelRes),
                     icon = icon,
-                    onClick = { nav.navigate(route) }
+                    onClick = action
                 )
             }
         }
@@ -107,15 +118,13 @@ fun HomeScreen(nav: NavController) {
 }
 
 @Composable
-private fun FeatureCard(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector, onClick: () -> Unit) {
+private fun FeatureCard(title: String, icon: ImageVector, onClick: () -> Unit) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .height(88.dp),
         onClick = onClick,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        )
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     ) {
         Row(
             modifier = Modifier
@@ -129,5 +138,3 @@ private fun FeatureCard(title: String, icon: androidx.compose.ui.graphics.vector
         }
     }
 }
-
-

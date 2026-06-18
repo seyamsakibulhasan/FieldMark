@@ -2,9 +2,6 @@ package com.fieldmark.app.ui.screens
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -47,11 +44,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +61,8 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.fieldmark.app.R
 import com.fieldmark.app.annotation.Annotation
+import com.fieldmark.app.capture.CaptureState
+import com.fieldmark.app.capture.PhotoMetadata
 import com.fieldmark.app.export.PdfExporter
 import com.fieldmark.app.nav.Routes
 import com.fieldmark.app.stereo.AnaglyphGenerator
@@ -70,6 +70,7 @@ import com.fieldmark.app.ui.components.AnnotationCanvas
 import com.fieldmark.app.ui.components.AnnotationTool
 import com.fieldmark.app.ui.components.EditorState
 import com.fieldmark.app.ui.components.ToolOptions
+import com.fieldmark.app.ui.components.colorToAndroidArgb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -88,8 +89,8 @@ fun EditorScreen(nav: NavController, path: String) {
     val undoStack = remember { mutableStateListOf<List<Annotation>>() }
     val redoStack = remember { mutableStateListOf<List<Annotation>>() }
     var tool by remember { mutableStateOf(AnnotationTool.None) }
-    var color by remember { mutableStateOf(Color(0xFFFF3B30)) }
-    var strokeWidth by remember { mutableStateOf(6f) }
+    var color by remember { mutableStateOf(Color(0xFFFF1744)) }
+    var strokeWidth by remember { mutableStateOf(5f) }
     var pixelsPerUnit by remember { mutableStateOf(12f) }
     var unit by remember { mutableStateOf("cm") }
     var projectName by remember { mutableStateOf("") }
@@ -100,6 +101,14 @@ fun EditorScreen(nav: NavController, path: String) {
     var textTapPos by remember { mutableStateOf<Offset?>(null) }
     var textValue by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
+
+    var metadata by remember { mutableStateOf<PhotoMetadata?>(null) }
+    LaunchedEffect(path) {
+        val (file, meta) = CaptureState.consume()
+        if (meta != null && file?.absolutePath == path) {
+            metadata = meta
+        }
+    }
 
     fun commit(newItems: List<Annotation>) {
         undoStack.add(items.toList())
@@ -119,10 +128,7 @@ fun EditorScreen(nav: NavController, path: String) {
                 },
                 actions = {
                     IconButton(onClick = {
-                        if (items.isNotEmpty()) {
-                            undoStack.add(items.toList()); redoStack.clear()
-                            items.removeAt(items.lastIndex)
-                        }
+                        if (items.isNotEmpty()) { undoStack.add(items.toList()); redoStack.clear(); items.removeAt(items.lastIndex) }
                     }) { Icon(Icons.Default.Undo, contentDescription = stringResource(R.string.undo)) }
                     IconButton(onClick = {
                         if (redoStack.isNotEmpty()) {
@@ -132,10 +138,7 @@ fun EditorScreen(nav: NavController, path: String) {
                         }
                     }) { Icon(Icons.Default.Redo, contentDescription = stringResource(R.string.redo)) }
                     IconButton(onClick = {
-                        if (items.isNotEmpty()) {
-                            undoStack.add(items.toList()); redoStack.clear()
-                            items.removeAt(items.lastIndex)
-                        }
+                        if (items.isNotEmpty()) { undoStack.add(items.toList()); redoStack.clear(); items.removeAt(items.lastIndex) }
                     }) { Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.clear)) }
                 }
             )
@@ -154,11 +157,9 @@ fun EditorScreen(nav: NavController, path: String) {
                     tool = tool,
                     options = ToolOptions(color = color, strokeWidth = strokeWidth),
                     background = bitmap,
+                    metadata = metadata,
                     onCommit = { commit(it) },
-                    onTextTap = { offset ->
-                        textTapPos = offset
-                        textValue = ""
-                    },
+                    onTextTap = { offset -> textTapPos = offset; textValue = "" },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -184,38 +185,14 @@ fun EditorScreen(nav: NavController, path: String) {
                         }
                     }
                     Spacer(Modifier.size(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        listOf(
-                            Color(0xFFFF3B30), Color(0xFF1A5FB4), Color(0xFF008000),
-                            Color(0xFFFFB300), Color.White, Color.Black
-                        ).forEach { c ->
-                            val selected = color == c
-                            Box(
-                                modifier = Modifier
-                                    .size(if (selected) 34.dp else 28.dp)
-                                    .background(c, CircleShape)
-                            ) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(28.dp)
-                                        .align(Alignment.Center)
-                                        .background(c, CircleShape)
-                                        .padding(2.dp)
-                                )
-                            }
-                            if (c != Color.Black) {
-                                Spacer(Modifier.width(0.dp))
-                            }
-                        }
-                        // color selection is wired via separate chips below
-                    }
-                    Spacer(Modifier.size(4.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(
-                            Color(0xFFFF3B30) to R.string.color_red,
+                            Color(0xFFFF1744) to R.string.color_red,
                             Color(0xFF1A5FB4) to R.string.color_blue,
                             Color(0xFF008000) to R.string.color_green,
-                            Color(0xFFFFB300) to R.string.color_yellow
+                            Color(0xFFFFB300) to R.string.color_yellow,
+                            Color.Black to R.string.color_black,
+                            Color.White to R.string.color_white
                         ).forEach { (c, labelRes) ->
                             FilterChip(
                                 selected = color == c,
@@ -287,7 +264,7 @@ fun EditorScreen(nav: NavController, path: String) {
                                 scope.launch {
                                     busy = true
                                     val composited = withContext(Dispatchers.Default) {
-                                        composeOnBitmap(bitmap, items.toList())
+                                        composeOnBitmap(bitmap, items.toList(), metadata)
                                     }
                                     val block = PdfExporter.TitleBlock(
                                         projectName = projectName.ifBlank { "FieldMark Project" },
@@ -314,9 +291,7 @@ fun EditorScreen(nav: NavController, path: String) {
                             onClick = {
                                 scope.launch {
                                     busy = true
-                                    val anaglyph = withContext(Dispatchers.Default) {
-                                        AnaglyphGenerator.generate(bitmap)
-                                    }
+                                    val anaglyph = withContext(Dispatchers.Default) { AnaglyphGenerator.generate(bitmap) }
                                     val out = File(context.filesDir, "anaglyph").apply { mkdirs() }
                                     val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
                                     val file = File(out, "anaglyph_$ts.png")
@@ -375,20 +350,23 @@ private fun iconForTool(t: AnnotationTool) = when (t) {
     AnnotationTool.Text -> Icons.Default.TextFields
 }
 
-private fun composeOnBitmap(base: Bitmap, items: List<Annotation>): Bitmap {
+private fun composeOnBitmap(base: Bitmap, items: List<Annotation>, metadata: PhotoMetadata?): Bitmap {
     val out = base.copy(Bitmap.Config.ARGB_8888, true)
     val canvas = android.graphics.Canvas(out)
-    items.forEach { drawOnCanvas(canvas, it) }
+    items.forEach { drawOnCanvas(canvas, it, base.width.toFloat(), base.height.toFloat()) }
+    metadata?.let { drawInfoStampOnCanvas(canvas, it, base.width.toFloat(), base.height.toFloat()) }
     return out
 }
 
-private fun drawOnCanvas(canvas: android.graphics.Canvas, a: Annotation) {
+private fun drawOnCanvas(canvas: android.graphics.Canvas, a: Annotation, imgW: Float, imgH: Float) {
+    val sw = a.strokeWidth
     val stroke = android.graphics.Paint().apply {
         isAntiAlias = true
         style = android.graphics.Paint.Style.STROKE
-        strokeWidth = a.strokeWidth
-        color = com.fieldmark.app.ui.components.colorToAndroidArgb(a.color)
+        strokeWidth = sw
+        color = colorToAndroidArgb(a.color)
     }
+    val fill = android.graphics.Paint(stroke).apply { style = android.graphics.Paint.Style.FILL }
     when (a) {
         is Annotation.Freehand -> {
             if (a.points.size < 2) return
@@ -402,44 +380,154 @@ private fun drawOnCanvas(canvas: android.graphics.Canvas, a: Annotation) {
         is Annotation.Arrow -> {
             canvas.drawLine(a.start.x, a.start.y, a.end.x, a.end.y, stroke)
             val angle = kotlin.math.atan2((a.end.y - a.start.y).toDouble(), (a.end.x - a.start.x).toDouble())
-            val head = 26f
-            val lx = (a.end.x - head * kotlin.math.cos(angle - Math.toRadians(28.0))).toFloat()
-            val ly = (a.end.y - head * kotlin.math.sin(angle - Math.toRadians(28.0))).toFloat()
-            val rx = (a.end.x - head * kotlin.math.cos(angle + Math.toRadians(28.0))).toFloat()
-            val ry = (a.end.y - head * kotlin.math.sin(angle + Math.toRadians(28.0))).toFloat()
-            canvas.drawLine(a.end.x, a.end.y, lx, ly, stroke)
-            canvas.drawLine(a.end.x, a.end.y, rx, ry, stroke)
+            val headLen = (sw * 4.5f).coerceAtLeast(14f)
+            val headW = headLen * 0.55f
+            val baseCx = a.end.x - headLen * kotlin.math.cos(angle).toFloat()
+            val baseCy = a.end.y - headLen * kotlin.math.sin(angle).toFloat()
+            val lx = (baseCx + headW * kotlin.math.cos(angle + Math.PI / 2.0)).toFloat()
+            val ly = (baseCy + headW * kotlin.math.sin(angle + Math.PI / 2.0)).toFloat()
+            val rx = (baseCx - headW * kotlin.math.cos(angle + Math.PI / 2.0)).toFloat()
+            val ry = (baseCy - headW * kotlin.math.sin(angle + Math.PI / 2.0)).toFloat()
+            val head = android.graphics.Path().apply {
+                moveTo(a.end.x, a.end.y); lineTo(lx, ly); lineTo(rx, ry); close()
+            }
+            canvas.drawPath(head, fill)
+            val anchorR = (sw * 1.1f).coerceAtLeast(5f)
+            canvas.drawCircle(a.start.x, a.start.y, anchorR + 1f, android.graphics.Paint(fill).apply { color = android.graphics.Color.WHITE })
+            canvas.drawCircle(a.start.x, a.start.y, anchorR, fill)
         }
         is Annotation.Line -> canvas.drawLine(a.start.x, a.start.y, a.end.x, a.end.y, stroke)
         is Annotation.Rect -> canvas.drawRect(a.topLeft.x, a.topLeft.y, a.bottomRight.x, a.bottomRight.y, stroke)
         is Annotation.Circle -> canvas.drawCircle(a.center.x, a.center.y, a.radius, stroke)
         is Annotation.Measurement -> {
-            canvas.drawLine(a.start.x, a.start.y, a.end.x, a.end.y, stroke)
-            val midX = (a.start.x + a.end.x) / 2f
-            val midY = (a.start.y + a.end.y) / 2f
-            val bg = android.graphics.Paint().apply { isAntiAlias = true; color = android.graphics.Color.argb(220, 255, 255, 255) }
-            val tx = android.graphics.Paint().apply {
-                isAntiAlias = true
-                style = android.graphics.Paint.Style.FILL
-                textSize = 36f
-                color = com.fieldmark.app.ui.components.colorToAndroidArgb(a.color)
+            val extLen = (sw * 5f).coerceAtLeast(18f)
+            val arrowLen = (sw * 3.2f).coerceAtLeast(10f)
+            val arrowW = arrowLen * 0.45f
+            val dx = a.end.x - a.start.x
+            val dy = a.end.y - a.start.y
+            val len = kotlin.math.hypot(dx.toDouble(), dy.toDouble()).toFloat()
+            if (len >= 0.5f) {
+                val nx = -dy / len; val ny = dx / len
+                val extColor = colorToAndroidArgb(a.color.copy(alpha = 0.55f))
+                val extPaint = android.graphics.Paint(stroke).apply { color = extColor; strokeWidth = (sw * 0.5f).coerceAtLeast(1.2f) }
+                val gap = (sw * 0.8f).coerceAtLeast(3f)
+                canvas.drawLine(a.start.x + nx * gap, a.start.y + ny * gap, a.start.x + nx * extLen, a.start.y + ny * extLen, extPaint)
+                canvas.drawLine(a.end.x + nx * gap, a.end.y + ny * gap, a.end.x + nx * extLen, a.end.y + ny * extLen, extPaint)
+                val textH = sw * 4f
+                val textPaint = android.graphics.Paint(fill).apply { textSize = textH; isFakeBoldText = true }
+                val textW = textPaint.measureText(a.label)
+                val padX = sw * 1.6f; val padY = sw * 0.8f
+                val midX = (a.start.x + a.end.x) / 2f
+                val midY = (a.start.y + a.end.y) / 2f
+                val breakHalf = textW / 2f + padX + 4f
+                canvas.drawLine(a.start.x, a.start.y, midX - breakHalf, midY, stroke)
+                canvas.drawLine(midX + breakHalf, midY, a.end.x, a.end.y, stroke)
+                val drawArrow = { tx: Float, ty: Float, reverse: Boolean ->
+                    val dir = if (reverse) 1.0 else -1.0
+                    val baseAng = kotlin.math.atan2(dy.toDouble(), dx.toDouble())
+                    val ax = (tx + dir * arrowLen * kotlin.math.cos(baseAng)).toFloat()
+                    val ay = (ty + dir * arrowLen * kotlin.math.sin(baseAng)).toFloat()
+                    val lxa = (ax + arrowW * kotlin.math.cos(baseAng + Math.PI / 2.0)).toFloat()
+                    val lya = (ay + arrowW * kotlin.math.sin(baseAng + Math.PI / 2.0)).toFloat()
+                    val rxa = (ax - arrowW * kotlin.math.cos(baseAng + Math.PI / 2.0)).toFloat()
+                    val rya = (ay - arrowW * kotlin.math.sin(baseAng + Math.PI / 2.0)).toFloat()
+                    val p = android.graphics.Path().apply { moveTo(tx, ty); lineTo(lxa, lya); lineTo(rxa, rya); close() }
+                    canvas.drawPath(p, fill)
+                }
+                drawArrow(a.start.x, a.start.y, reverse = false)
+                drawArrow(a.end.x, a.end.y, reverse = true)
+                val bg = android.graphics.Paint(fill).apply { color = android.graphics.Color.argb(235, 255, 255, 255) }
+                canvas.drawRect(midX - textW / 2f - padX, midY - textH / 2f - padY / 2f, midX + textW / 2f + padX, midY + textH / 2f + padY / 2f, bg)
+                canvas.drawRect(midX - textW / 2f - padX, midY - textH / 2f - padY / 2f, midX + textW / 2f + padX, midY + textH / 2f + padY / 2f, android.graphics.Paint(stroke).apply { strokeWidth = (sw * 0.4f).coerceAtLeast(1f) })
+                canvas.drawText(a.label, midX - textW / 2f, midY + textH / 2.5f, textPaint)
             }
-            val w = tx.measureText(a.label)
-            canvas.drawRect(midX - w / 2f - 6, midY - 50, midX + w / 2f + 6, midY - 14, bg)
-            canvas.drawText(a.label, midX - w / 2f, midY - 20, tx)
         }
         is Annotation.TextNote -> {
-            val tx = android.graphics.Paint().apply {
-                isAntiAlias = true
-                style = android.graphics.Paint.Style.FILL
-                textSize = a.fontSizeSp * 3f
-                color = com.fieldmark.app.ui.components.colorToAndroidArgb(a.color)
-            }
-            val w = tx.measureText(a.text)
-            val h = tx.textSize
-            val bg = android.graphics.Paint().apply { isAntiAlias = true; color = android.graphics.Color.argb(180, 255, 255, 255) }
-            canvas.drawRect(a.position.x - 4, a.position.y - h - 4, a.position.x + w + 4, a.position.y + 4, bg)
-            canvas.drawText(a.text, a.position.x, a.position.y, tx)
+            val markerR = (sw * 1.3f + 5f).coerceAtLeast(8f)
+            val whiteFill = android.graphics.Paint(fill).apply { color = android.graphics.Color.WHITE }
+            val innerR = markerR * 0.62f
+            canvas.drawCircle(a.position.x, a.position.y, markerR + 1.5f, whiteFill)
+            canvas.drawCircle(a.position.x, a.position.y, markerR, fill)
+            canvas.drawCircle(a.position.x, a.position.y, innerR, whiteFill)
+            canvas.drawCircle(a.position.x, a.position.y, innerR * 0.55f, fill)
+            val textH = a.fontSizeSp * 2.6f
+            val tp = android.graphics.Paint(fill).apply { textSize = textH; isFakeBoldText = true }
+            val textW = tp.measureText(a.text)
+            val padX = sw * 1.8f; val padY = sw * 1.0f
+            val boxW = textW + padX * 2f
+            val boxH = textH + padY * 2f
+            val dirX = if (a.position.x + boxW + markerR * 3f < imgW) 1f else -1f
+            val boxX = a.position.x + dirX * (markerR * 2.5f)
+            val boxY = a.position.y - boxH / 2f
+            val leaderStartX = a.position.x + dirX * markerR
+            val leaderStartY = a.position.y
+            val leaderEndX = boxX
+            val leaderEndY = boxY + boxH / 2f
+            val leader = android.graphics.Paint(stroke).apply { strokeWidth = (sw * 0.6f).coerceAtLeast(1.2f) }
+            canvas.drawLine(leaderStartX, leaderStartY, leaderEndX, leaderEndY, leader)
+            val boxRect = android.graphics.RectF(boxX, boxY, boxX + boxW, boxY + boxH)
+            val boxBg = android.graphics.Paint(fill).apply { color = android.graphics.Color.argb(245, 255, 255, 255) }
+            canvas.drawRoundRect(boxRect, 4f, 4f, boxBg)
+            canvas.drawRoundRect(boxRect, 4f, 4f, android.graphics.Paint(stroke).apply { strokeWidth = (sw * 0.45f).coerceAtLeast(1f) })
+            canvas.drawText(a.text, boxX + padX, boxY + padY + textH * 0.85f, tp)
         }
     }
+}
+
+private fun drawInfoStampOnCanvas(canvas: android.graphics.Canvas, meta: PhotoMetadata, imgW: Float, imgH: Float) {
+    val pad = (imgW * 0.012f).coerceAtLeast(10f)
+    val stampW = (imgW * 0.36f).coerceAtLeast(220f)
+    val stampH = (imgH * 0.11f).coerceAtLeast(72f)
+    val sx = pad
+    val sy = imgH - stampH - pad
+    val bg = android.graphics.Paint().apply { isAntiAlias = true; color = android.graphics.Color.parseColor("#EE0A0E1A") }
+    val rect = android.graphics.RectF(sx, sy, sx + stampW, sy + stampH)
+    canvas.drawRoundRect(rect, 10f, 10f, bg)
+    val border = android.graphics.Paint().apply { isAntiAlias = true; style = android.graphics.Paint.Style.STROKE; strokeWidth = 1f; color = android.graphics.Color.argb(45, 255, 255, 255) }
+    canvas.drawRoundRect(rect, 10f, 10f, border)
+
+    val iconSize = stampH * 0.62f
+    val iconCx = sx + iconSize / 2f + pad
+    val iconCy = sy + stampH / 2f
+    val iconR = iconSize / 2f
+    val ring = android.graphics.Paint().apply { isAntiAlias = true; style = android.graphics.Paint.Style.STROKE; strokeWidth = 1.4f; color = android.graphics.Color.argb(55, 255, 255, 255) }
+    canvas.drawCircle(iconCx, iconCy, iconR, ring)
+    canvas.drawCircle(iconCx, iconCy, iconR * 0.65f, android.graphics.Paint(ring).apply { strokeWidth = 1f; color = android.graphics.Color.argb(35, 255, 255, 255) })
+    val angleRad = ((meta.heading - 90f) * Math.PI / 180.0)
+    val tipX = (iconCx + iconR * kotlin.math.cos(angleRad)).toFloat()
+    val tipY = (iconCy + iconR * kotlin.math.sin(angleRad)).toFloat()
+    val tailX = (iconCx - iconR * 0.55f * kotlin.math.cos(angleRad)).toFloat()
+    val tailY = (iconCy - iconR * 0.55f * kotlin.math.sin(angleRad)).toFloat()
+    val perpA = angleRad + Math.PI / 2.0
+    val w = iconR * 0.28f
+    val needle = android.graphics.Path().apply {
+        moveTo(tipX, tipY)
+        lineTo((tipX + w * kotlin.math.cos(perpA)).toFloat(), (tipY + w * kotlin.math.sin(perpA)).toFloat())
+        lineTo(iconCx, iconCy)
+        lineTo((tipX - w * kotlin.math.cos(perpA)).toFloat(), (tipY - w * kotlin.math.sin(perpA)).toFloat())
+        close()
+    }
+    canvas.drawPath(needle, android.graphics.Paint().apply { isAntiAlias = true; color = android.graphics.Color.parseColor("#FFFF1744") })
+    val tw = w * 0.7f
+    val tail = android.graphics.Path().apply {
+        moveTo(tailX, tailY)
+        lineTo((tailX + tw * kotlin.math.cos(perpA)).toFloat(), (tailY + tw * kotlin.math.sin(perpA)).toFloat())
+        lineTo(iconCx, iconCy)
+        lineTo((tailX - tw * kotlin.math.cos(perpA)).toFloat(), (tailY - tw * kotlin.math.sin(perpA)).toFloat())
+        close()
+    }
+    canvas.drawPath(tail, android.graphics.Paint().apply { isAntiAlias = true; color = android.graphics.Color.argb(220, 255, 255, 255) })
+    canvas.drawCircle(iconCx, iconCy, iconR * 0.10f, android.graphics.Paint().apply { isAntiAlias = true; color = android.graphics.Color.WHITE })
+    canvas.drawCircle(iconCx, iconCy, iconR * 0.05f, android.graphics.Paint().apply { isAntiAlias = true; color = android.graphics.Color.parseColor("#FF0A0E1A") })
+
+    val textX = iconCx + iconR + pad
+    val headingText = "${meta.cardinal}  ${meta.heading.toInt()}°"
+    val prText = "P ${"%.1f".format(meta.pitch)}°   R ${"%.1f".format(meta.roll)}°"
+    val timeText = meta.formattedTime()
+    val headingPaint = android.graphics.Paint().apply { isAntiAlias = true; isFakeBoldText = true; color = android.graphics.Color.WHITE; textSize = stampH * 0.22f }
+    val prPaint = android.graphics.Paint().apply { isAntiAlias = true; color = android.graphics.Color.parseColor("#B8C2D9"); textSize = stampH * 0.16f }
+    val timePaint = android.graphics.Paint().apply { isAntiAlias = true; color = android.graphics.Color.parseColor("#8B95AD"); textSize = stampH * 0.14f }
+    canvas.drawText(headingText, textX, sy + stampH * 0.36f, headingPaint)
+    canvas.drawText(prText, textX, sy + stampH * 0.62f, prPaint)
+    canvas.drawText(timeText, textX, sy + stampH * 0.84f, timePaint)
 }

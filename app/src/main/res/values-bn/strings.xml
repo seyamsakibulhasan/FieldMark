@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">মিজানুর রহমান</string>
-    <string name="tagline">ফিল্ড ফটো অ্যানোটেশন, ২ডি→৩ডি, পরিমাপ, কম্পাস ও প্রিন্ট-রেডি পিডিএফ — ইঞ্জিনিয়ারদের জন্য তৈরি।</string>
+    <string name="tagline">কম্পাসের দিকনির্দেশ, পেশাদার পরিমাপ ও প্রিন্ট-রেডি পিডিএফ সহ ফিল্ড ফটো অ্যানোটেশন।</string>
 
     <string name="back">ফিরে যান</string>
     <string name="language">ভাষা</string>
 
     <string name="capture_photo">ছবি তুলুন</string>
-    <string name="compass">কম্পাস</string>
-    <string name="anaglyph">২ডি → ৩ডি অ্যানাগ্লিফ</string>
+    <string name="pick_from_gallery">গ্যালারি থেকে ছবি (২ডি → ৩ডি)</string>
 
     <string name="camera_permission_needed">ছবি তুলতে ক্যামেরা অনুমতি প্রয়োজন।</string>
     <string name="capture">ক্যাপচার</string>

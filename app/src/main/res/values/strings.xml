@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Mizanur Rahman</string>
-    <string name="tagline">Field photo annotation, 2D→3D, measurements, compass &amp; print-ready PDF — built for engineers.</string>
+    <string name="tagline">Field photo annotation with embedded compass heading, professional engineering measurements, and print-ready PDF export.</string>
 
     <!-- Navigation -->
     <string name="back">Back</string>
@@ -9,8 +9,7 @@
 
     <!-- Home -->
     <string name="capture_photo">Capture Photo</string>
-    <string name="compass">Compass</string>
-    <string name="anaglyph">2D → 3D Anaglyph</string>
+    <string name="pick_from_gallery">Pick Photo (2D → 3D)</string>
 
     <!-- Camera -->
     <string name="camera_permission_needed">Camera permission is required to capture photos.</string>

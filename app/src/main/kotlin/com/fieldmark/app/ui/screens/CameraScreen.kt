@@ -1,7 +1,6 @@
 package com.fieldmark.app.ui.screens
 
 import android.Manifest
-import android.content.Context
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageCapture
@@ -13,9 +12,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -30,8 +27,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,7 +44,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.fieldmark.app.R
+import com.fieldmark.app.capture.CaptureState
+import com.fieldmark.app.capture.PhotoMetadata
+import com.fieldmark.app.compass.rememberCompass
 import com.fieldmark.app.nav.Routes
+import com.fieldmark.app.ui.components.CompassRose
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
@@ -61,9 +62,13 @@ import java.util.Locale
 fun CameraScreen(nav: NavController) {
     val context = LocalContext.current
     val cameraPerm = rememberPermissionState(Manifest.permission.CAMERA)
-    LaunchedEffect(Unit) {
-        if (!cameraPerm.status.isGranted) cameraPerm.launchPermissionRequest()
-    }
+    LaunchedEffect(Unit) { if (!cameraPerm.status.isGranted) cameraPerm.launchPermissionRequest() }
+
+    val compass = rememberCompass(context)
+    val heading by compass.heading.collectAsState()
+    val pitch by compass.pitch.collectAsState()
+    val roll by compass.roll.collectAsState()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -78,10 +83,9 @@ fun CameraScreen(nav: NavController) {
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize().background(Color.Black)) {
             if (cameraPerm.status.isGranted) {
-                CameraPreview(onCaptured = { file ->
-                    nav.navigate(Routes.editor(file.absolutePath)) {
-                        popUpTo(Routes.HOME)
-                    }
+                CameraPreview(heading = heading, onCaptured = { file ->
+                    CaptureState.set(file, PhotoMetadata(heading, pitch, roll))
+                    nav.navigate(Routes.editor(file.absolutePath)) { popUpTo(Routes.HOME) }
                 })
             } else {
                 Column(
@@ -101,23 +105,15 @@ fun CameraScreen(nav: NavController) {
 }
 
 @Composable
-private fun CameraPreview(onCaptured: (File) -> Unit) {
+private fun CameraPreview(heading: Float, onCaptured: (File) -> Unit) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember { PreviewView(context) }
     var imageCapture by remember { mutableStateOf<ImageCapture?>(null) }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            // CameraX lifecycle is bound to lifecycleOwner; releasing is automatic.
-        }
-    }
-
     LaunchedEffect(previewView) {
         val cameraProvider = ProcessCameraProvider.getInstance(context).get()
-        val preview = Preview.Builder().build().also {
-            it.setSurfaceProvider(previewView.surfaceProvider)
-        }
+        val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
         imageCapture = ImageCapture.Builder()
             .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
             .build()
@@ -132,6 +128,18 @@ private fun CameraPreview(onCaptured: (File) -> Unit) {
 
     Box(modifier = Modifier.fillMaxSize()) {
         AndroidView(factory = { previewView }, modifier = Modifier.fillMaxSize())
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(16.dp)
+                .size(80.dp)
+                .background(Color.Black.copy(alpha = 0.35f), CircleShape)
+                .padding(6.dp)
+        ) {
+            CompassRose(heading = heading, modifier = Modifier.fillMaxSize())
+        }
+
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
