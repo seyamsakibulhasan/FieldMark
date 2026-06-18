@@ -2,7 +2,7 @@
 
 > Field photo annotation, 2D→3D anaglyph, measurements, compass, and print-ready PDF export — built for engineers, electricians, and site supervisors.
 
-**FieldMark** is a free, open-source Android app that turns your phone into a smart field-documentation tool. Capture a photo, mark it up with arrows, dimensions, freehand handwriting, and text notes, view it as a red-cyan 3D anaglyph, check your heading with a built-in compass, and export a print-ready engineering PDF — all offline, in **English or বাংলা**.
+**Mizanur Rahman** is a free, open-source Android app that turns your phone into a smart field-documentation tool. Capture a photo, mark it up with arrows, dimensions, freehand handwriting, and text notes, view it as a red-cyan 3D anaglyph, check your heading with a built-in compass, and export a print-ready engineering PDF — all offline, in **English or বাংলা**.
 
 ---
 
@@ -31,7 +31,7 @@
 
 1. Go to the [Actions](../../actions) tab → pick the latest green build → scroll to **Artifacts** → download `FieldMark-APK`.
 2. Transfer to your Android device and install (you may need to enable *Install unknown apps* for your file manager / browser).
-3. The package is `com.fieldmark.app.debug` for debug builds and `com.fieldmark.app` for release builds.
+3. The package is `com.fieldmark.app.debug` for debug builds and `com.fieldmark.app` for release builds. The app displays as **Mizanur Rahman**.
 
 > Want a **signed release**? Add these repository secrets and the workflow will sign the release APK automatically:
 > - `DEBUG_KEYSTORE_B64` — base64 of your `.jks` file
